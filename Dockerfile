@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         xvfb xauth \
         chromium chromium-driver \
         curl ca-certificates \
+        libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
