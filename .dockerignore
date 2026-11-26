@@ -1,0 +1,16 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+.git
+.DS_Store
+uploads/
+celerybeat-schedule*
+check.py
+scrapy.py
+Dockerfile
+docker-compose.yml
+Caddyfile

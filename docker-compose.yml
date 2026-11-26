@@ -1,0 +1,72 @@
+# CareerSync backend (VPS deployment)
+#
+# Database  -> Neon (external)      Redis -> Upstash (external)
+# Both are configured through .env, so there is no db/redis container here.
+#
+#   docker compose up -d --build     start / update
+#   docker compose logs -f api       follow logs
+#   docker compose down              stop (volumes are kept)
+
+name: careersync
+
+x-backend: &backend
+  build: .
+  image: careersync-server:latest
+  env_file: .env
+  restart: unless-stopped
+  shm_size: "1gb"          # Chromium / Firefox crash with the default 64 MB
+
+services:
+  api:
+    <<: *backend
+    container_name: careersync_api
+    expose:
+      - "5000"
+    volumes:
+      - uploads:/app/uploads
+
+  # Runs the scraping jobs. Concurrency 1: each scrape is memory heavy.
+  worker:
+    <<: *backend
+    container_name: careersync_worker
+    command: >
+      xvfb-run -a -s "-screen 0 1920x1080x24"
+      celery -A app.celery_config.celery_app worker
+      --loglevel=info --concurrency=1
+    volumes:
+      - uploads:/app/uploads
+
+  # Scheduler: daily scrape + cleanup (see app/celery_config.py).
+  beat:
+    <<: *backend
+    container_name: careersync_beat
+    command: >
+      celery -A app.celery_config.celery_app beat
+      --loglevel=info -s /data/celerybeat-schedule
+    volumes:
+      - beat_data:/data
+
+  # HTTPS reverse proxy. Set DOMAIN in .env (e.g. api.example.com) and point
+  # its DNS A record at the VPS; Caddy gets the certificate automatically.
+  # With DOMAIN unset it serves plain HTTP on port 80.
+  caddy:
+    image: caddy:2-alpine
+    container_name: careersync_caddy
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      DOMAIN: ${DOMAIN:-:80}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  uploads:
+  beat_data:
+  caddy_data:
+  caddy_config:
