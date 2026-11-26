@@ -2,6 +2,7 @@
 #
 # Database  -> Neon (external)      Redis -> Upstash (external)
 # Both are configured through .env, so there is no db/redis container here.
+# HTTPS is handled by the host nginx (certbot), not by a container.
 #
 #   docker compose up -d --build     start / update
 #   docker compose logs -f api       follow logs
@@ -20,8 +21,9 @@ services:
   api:
     <<: *backend
     container_name: careersync_api
-    expose:
-      - "5000"
+    # Local-only: the VPS nginx (HTTPS) proxies to 127.0.0.1:8088.
+    ports:
+      - "127.0.0.1:${API_PORT:-8088}:5000"
     volumes:
       - uploads:/app/uploads
 
@@ -46,27 +48,6 @@ services:
     volumes:
       - beat_data:/data
 
-  # HTTPS reverse proxy. Set DOMAIN in .env (e.g. api.example.com) and point
-  # its DNS A record at the VPS; Caddy gets the certificate automatically.
-  # With DOMAIN unset it serves plain HTTP on port 80.
-  caddy:
-    image: caddy:2-alpine
-    container_name: careersync_caddy
-    restart: unless-stopped
-    depends_on:
-      - api
-    environment:
-      DOMAIN: ${DOMAIN:-:80}
-    ports:
-      - "8080:80"
-      - "8443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-
 volumes:
   uploads:
   beat_data:
-  caddy_data:
-  caddy_config:
